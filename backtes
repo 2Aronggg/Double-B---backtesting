@@ -1,0 +1,160 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import json
+import warnings
+warnings.filterwarnings('ignore')
+
+print("⚡ AlphaStudy Quant Engine - Initializing...")
+
+# 1. 16개 유니버스 티커 매핑 (프론트엔드 ID와 동일하게 순서 맞춤)
+# 참고: 한국 주식 ETF 등은 야후 파이낸스 티커 기준(예: KODEX 200 = 069500.KS)
+UNIVERSE = [
+    {"id": 0, "name": "비트코인", "ticker": "BTC-USD", "group": "Crypto"},
+    {"id": 1, "name": "솔라나", "ticker": "SOL-USD", "group": "Crypto"},
+    {"id": 2, "name": "이더리움", "ticker": "ETH-USD", "group": "Crypto"},
+    {"id": 3, "name": "금", "ticker": "GC=F", "group": "Commodity"},
+    {"id": 4, "name": "구리", "ticker": "HG=F", "group": "Commodity"},
+    {"id": 5, "name": "원유", "ticker": "CL=F", "group": "Commodity"},
+    {"id": 6, "name": "S&P 500", "ticker": "^GSPC", "group": "DM Size"},
+    {"id": 7, "name": "Russell 2000", "ticker": "^RUT", "group": "DM Size"},
+    {"id": 8, "name": "KODEX 200 (대형주)", "ticker": "069500.KS", "group": "EM Size"},
+    {"id": 9, "name": "KODEX 코스닥150 (중소형)", "ticker": "229200.KS", "group": "EM Size"},
+    {"id": 10, "name": "나스닥 100", "ticker": "QQQ", "group": "DM Market"},
+    {"id": 11, "name": "독일 DAX", "ticker": "^GDAXI", "group": "DM Market"},
+    {"id": 12, "name": "KOSPI 200 지수", "ticker": "^KS200", "group": "EM Market"},
+    {"id": 13, "name": "KODEX 코스닥150 레버리지", "ticker": "233740.KS", "group": "EM Market"},
+    {"id": 14, "name": "인도 NIFTY 50", "ticker": "^NSEI", "group": "EM Market"},
+    {"id": 15, "name": "KOSPI 종합", "ticker": "^KS11", "group": "EM Market"}
+]
+
+# 2. RSI 계산 함수
+def calculate_rsi(data, period=14):
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+# 3. 백테스팅 핵심 로직
+def run_backtest(ticker_info, start_date='2018-01-01', end_date='2026-04-25', split_date='2024-01-01'):
+    ticker = ticker_info['ticker']
+    print(f"[{ticker_info['name']}] 데이터 다운로드 및 분석 중...")
+    
+    try:
+        df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+        if df.empty:
+            raise ValueError("Data not found")
+            
+        # 단일 컬럼 추출 (MultiIndex 방지)
+        df = df['Close'].to_frame()
+        df.columns = ['Close']
+        
+        # --- 지표 계산 ---
+        # Train 기간에 최적화했다고 가정한 파라미터 적용 (BB: 20일/2표준편차, RSI: 14일)
+        df['MA20'] = df['Close'].rolling(window=20).mean()
+        df['STD'] = df['Close'].rolling(window=20).std()
+        df['BB_Upper'] = df['MA20'] + (df['STD'] * 2)
+        df['BB_Lower'] = df['MA20'] - (df['STD'] * 2)
+        df['RSI'] = calculate_rsi(df['Close'], 14)
+        
+        # --- Train / Test 데이터 스플릿 ---
+        # 실제 대시보드에 뿌려질 OOS(Out-of-Sample) 데이터만 추출
+        test_df = df.loc[split_date:].copy()
+        test_df.dropna(inplace=True)
+        
+        # --- 매매 시그널 포착 (Double-B & RSI) ---
+        buy_signals = []
+        sell_signals = []
+        trades = 0
+        winning_trades = 0
+        gross_profit = 0
+        gross_loss = 0
+        
+        position = 0 # 0: 현금, 1: 매수 상태
+        entry_price = 0
+        
+        for i in range(len(test_df)):
+            price = test_df['Close'].iloc[i]
+            bb_lower = test_df['BB_Lower'].iloc[i]
+            bb_upper = test_df['BB_Upper'].iloc[i]
+            rsi = test_df['RSI'].iloc[i]
+            
+            # 매수 조건: 하단 밴드 이탈 & RSI 과매도(40 이하)
+            if position == 0 and price < bb_lower and rsi < 40:
+                buy_signals.append(price)
+                sell_signals.append(None)
+                position = 1
+                entry_price = price
+            
+            # 매도 조건: 상단 밴드 돌파 & RSI 과매수(60 이상)
+            elif position == 1 and price > bb_upper and rsi > 60:
+                buy_signals.append(None)
+                sell_signals.append(price)
+                position = 0
+                trades += 1
+                
+                # 수익/손실 계산 (수수료 0.1% 반영)
+                profit = (price - entry_price) - (price * 0.001)
+                if profit > 0:
+                    winning_trades += 1
+                    gross_profit += profit
+                else:
+                    gross_loss += abs(profit)
+            else:
+                buy_signals.append(None)
+                sell_signals.append(None)
+                
+        test_df['Buy'] = buy_signals
+        test_df['Sell'] = sell_signals
+        
+        # --- 퀀트 KPI 지표 계산 ---
+        # 수익률 곡선(Equity Curve) 단순화 계산
+        daily_return = test_df['Close'].pct_change().fillna(0)
+        equity_curve = (1 + daily_return).cumprod() * 100
+        
+        cagr = (equity_curve.iloc[-1] / 100) ** (252 / len(test_df)) - 1
+        mdd = (equity_curve / equity_curve.cummax() - 1).min()
+        win_rate = (winning_trades / trades * 100) if trades > 0 else 0
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (9.99 if gross_profit > 0 else 0)
+
+        # JSON용 데이터 포맷팅
+        # 데이터가 너무 크면 프론트가 버벅일 수 있으므로 1주일에 2번 꼴로 리샘플링 하거나 그대로 넘깁니다. (여기선 그대로)
+        return {
+            "id": ticker_info['id'],
+            "name": ticker_info['name'],
+            "group": ticker_info['group'],
+            "cagr": round(cagr * 100, 2),
+            "mdd": round(mdd * 100, 2),
+            "winRate": round(win_rate, 1),
+            "pf": round(profit_factor, 2),
+            "trades": trades,
+            "chartData": {
+                "labels": test_df.index.strftime('%Y-%m-%d').tolist(),
+                "prices": test_df['Close'].round(2).tolist(),
+                "bbUpper": test_df['BB_Upper'].round(2).tolist(),
+                "bbLower": test_df['BB_Lower'].round(2).tolist(),
+                "rsi": test_df['RSI'].round(1).tolist(),
+                "buySignals": [round(x, 2) if x is not None else None for x in buy_signals],
+                "sellSignals": [round(x, 2) if x is not None else None for x in sell_signals]
+            }
+        }
+        
+    except Exception as e:
+        print(f"[{ticker_info['name']}] 에러 발생: {e}")
+        return None
+
+# 4. 전체 유니버스 실행 및 JSON 저장
+if __name__ == "__main__":
+    final_results = []
+    
+    for asset in UNIVERSE:
+        result = run_backtest(asset)
+        if result:
+            final_results.append(result)
+            
+    # JSON 파일로 떨구기
+    with open('backtest_data.json', 'w', encoding='utf-8') as f:
+        json.dump(final_results, f, ensure_ascii=False, indent=4)
+        
+    print("\n✅ 백테스팅 완료! 'backtest_data.json' 파일이 성공적으로 생성되었습니다.")
