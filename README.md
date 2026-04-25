@@ -1,66 +1,64 @@
-# Double-B: AI-Driven Quantitative Research & Backtesting
+# Double-B: Quantitative AI Research & Analysis System
 
-> **Quantitative Research Framework for Market Alpha Discovery**
-> 
-> 본 프로젝트는 금융 시장의 비효율성을 탐색하고 머신러닝 모델과 통계적 기법을 결합하여 데이터 기반의 투자 전략을 도출하는 퀀트 리서치 파이프라인이다.
-
----
-
-## Overview
-Double-B는 데이터 수집부터 피처 엔지니어링, 모델 학습, 그리고 전략 백테스팅과 시각화 대시보드까지 이어지는 End-to-End 리서치 시스템이다.
-
-* **Alpha Discovery:** 다변량 데이터 분석을 통한 유의미한 투자 신호 포착
-* **Systematic Backtesting:** 생존 편향 및 룩어헤드 편향을 배제한 엄격한 성과 검증
-* **Data Visualization:** 리서치 결과를 분석하기 위한 대시보드 환경 제공
+> **AI 기반 시장 차트 분석 및 다각적 백테스팅 엔진**
+>
+> 본 프로젝트는 '더블비(Double-B)' 지표를 핵심으로 하여 자산군별, 시장별, 사이즈별 변동성과 모멘텀을 통계적으로 분석하는 리서치 프레임워크이다.
 
 ---
 
-## Tech Stack
-* **Language:** Python 3.9+
-* **Data Analysis:** Pandas, NumPy, SciPy, Statsmodels
-* **Machine Learning:** PyTorch, XGBoost, Scikit-learn
-* **Visualization:** Plotly, Streamlit, Matplotlib
-* **Database:** SQLite / PostgreSQL
+## 🔬 Analysis Methodology: Bollinger Band + @
+시장 차트의 통계적 특성을 분석하기 위해 다음과 같은 기술적 지표와 조건값을 설정하여 수익률의 추세 및 비추세 구간을 정의한다.
+
+### 1. 지표 및 조건 상세
+| 구분 | 지표/조건 | 설정값 및 목적 |
+| :--- | :--- | :--- |
+| **타임프레임** | 5분봉 | 단기 변동성 포착 및 정밀 진입 시점 결정 |
+| **변동성 1** | Band A (더블비) | 20주기 / 2 표준편차 / 종가 기준 (일반적 가격 변동 범위 확인) |
+| **변동성 2** | Band B (더블비) | 4주기 / 4 표준편차 / 시가 기준 (극단적 단기 변동성 폭발 포착) |
+| **모멘텀** | RSI | 과매수(70) / 과매도(30) 기준을 통한 추세 에너지 측정 |
+| **추세 필터** | 이동평균선 (MA) | 20, 60, 120 주기를 활용한 메인 트렌드 방향성 확인 |
 
 ---
 
-## Methodology
-본 프로젝트는 통계적 유의성과 리스크 관리에 중점을 둔다.
+## 📊 Analysis Targets
+데이터의 범위, 시장의 성격, 전략의 유효기간을 고려하여 총 16개의 대상을 분석한다.
 
-### 1. Factor Engineering
-기술적 지표 분석뿐만 아니라 통계적 모멘텀 및 변동성 클러스터링을 분석하여 독립적인 알파 팩터를 추출한다.
+### 1. 자산군 별 분석 (Asset Class) - 총 7개
+* **주식:** KOSPI 200, KOSDAQ 레버리지
+* **원자재:** 금(Gold), 구리, 원유 (공급망 및 인플레이션 기반 추세 분석)
+* **가상자산:** BTC-USD (Large-cap), SOL-USD (Mid-cap)
 
-### 2. Deep Learning Model
-시계열 데이터의 비선형적 특성을 파악하기 위해 LSTM 또는 Transformer 아키텍처를 활용하여 자산 수익률의 방향성을 예측한다.
+### 2. 사이즈 별 분석 - 총 4개
+* **대형주:** S&P 500, KOSPI 시가총액 1위 ~ 100위 (KOSPI 100)
+* **중소형주:** Russell 2000, KOSPI 시가총액 300위 이하 또는 KOSDAQ 전종목
 
-### 3. Portfolio Optimization
-$$Maximize \ Sharpe \ Ratio = \frac{E[R_p - R_f]}{\sigma_p}$$
-* **Risk Management:** MDD(Maximum Drawdown) 통제를 위한 동적 자산 배분 전략을 적용한다.
-* **Position Sizing:** 켈리 공식 및 리스크 패리티 기반의 포지션 최적화를 수행한다.
-
----
-
-## Research Workflow
-1. **Data Ingestion:** 금융 데이터 API를 활용한 OHLCV 및 대안 데이터 수집
-2. **Preprocessing:** 이상치 처리, Scaling 및 시계열 데이터의 정상성 확보
-3. **Backtesting:** 거래 수수료, 슬리피지 등을 반영한 현실적인 시뮬레이션 시행
-4. **Analysis:** Sharpe Ratio, Sortino Ratio, Information Ratio 등 성과 지표 산출
+### 3. 시장 별 분석 (Market) - 총 4개
+* **선진국 시장 (Developed):** 미국(NASDAQ), 독일(DAX)
+* **신흥국 시장 (Emerging):** 한국(KOSPI), 인도(NIFTY 50)
 
 ---
 
-## Dashboard Preview
-대시보드를 통해 전략별 수익률 곡선 및 리스크 지표를 실시간으로 모니터링할 수 있다. 
-`streamlit run app.py` 명령어를 사용하여 로컬 리포트 환경을 구동한다.
+## 📅 Backtesting Environment
+전략의 견고함을 검증하기 위해 다음과 같이 데이터 기간을 분리하여 학습 및 테스트를 진행한다.
+
+* **훈련 데이터 (In-Sample):** 2023년 ~ 2024년 (2개년)
+* **테스트 데이터 (Out-of-Sample):** 2025년 ~ 2026년 (2개년)
 
 ---
 
-## Quick Start
+## 🛠 System Architecture
+본 프로젝트는 웹 기반 대시보드를 통해 리서치 결과를 시각화한다.
+
+* **Backend:** Python 기반 데이터 전처리 및 통계 연산 루틴
+* **Frontend:** HTML/JS 기반 실시간 차트 렌더링 및 분석 결과 시각화
+* **Analysis Engine:** 보유기간별/자산군별/사이즈별 수익률 통계 분석 모듈
+
+---
+
+## ⚙️ Usage
 ```bash
-# 1. Repository Clone
-git clone [https://github.com/your-username/Double-B.git](https://github.com/your-username/Double-B.git)
-
-# 2. Dependency Install
+# 1. 의존성 설치
 pip install -r requirements.txt
 
-# 3. Execution
-python main.py
+# 2. 분석 엔진 실행 및 웹 대시보드 구동
+python app.py
