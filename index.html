@@ -96,11 +96,9 @@
             const q_growth = Math.pow(1 + (cagr/100), 1/4) - 1; // 분기별 기대 성장률
             
             for(let i=1; i<=quarters; i++) {
-                // 22년 하반기 ~ 23년 상반기(인덱스 3~6) 부근에서 MDD 반영 (조정장 연출)
                 if(i >= 3 && i <= 6) {
                     current = current * (1 - (Math.abs(mdd)/100)/4); 
                 } else {
-                    // 약간의 랜덤성을 부여한 분기 성장
                     let noise = (Math.random() - 0.3) * 0.05; 
                     current = current * (1 + q_growth + noise);
                 }
@@ -186,7 +184,7 @@
                             </div>
 
                         <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg relative mt-6">
-                            <h3 class="text-slate-200 font-bold mb-4 flex items-center gap-2" id="chartTitle">📊 자산 성장 곡선 (Equity Curve)</h3>
+                            <h3 class="text-slate-200 font-bold mb-4 flex items-center gap-2" id="chartTitle">📊 자산 성장 곡선 (Equity Curve) & 지표</h3>
                             <div class="chart-container">
                                 <canvas id="singleAssetChart"></canvas>
                             </div>
@@ -199,7 +197,16 @@
                     window.updateAssetDetail = function() {
                         const id = document.getElementById('assetSelector').value;
                         const asset = assetsData[id];
+                        
+                        // 기본 Equity Curve 데이터 생성
                         const curveData = generateCurve(asset.cagr, asset.mdd);
+                        
+                        // 볼린저 밴드 가상 데이터 생성 (위아래 10% 정도의 밴드)
+                        const bbUpper = curveData.map(val => val * 1.1);
+                        const bbLower = curveData.map(val => val * 0.9);
+                        
+                        // RSI 가상 데이터 생성 (30 ~ 70 사이 박스권 무작위 값)
+                        const rsiData = curveData.map(() => Math.floor(Math.random() * 40) + 30);
 
                         // 1. KPI 카드 업데이트
                         document.getElementById('kpiCards').innerHTML = `
@@ -225,7 +232,7 @@
                             </div>
                         `;
 
-                        document.getElementById('chartTitle').innerHTML = `📊 [${asset.name}] 자산 성장 곡선`;
+                        document.getElementById('chartTitle').innerHTML = `📊 [${asset.name}] 자산 성장 곡선 및 지표`;
 
                         // 2. 차트 업데이트
                         const ctx = document.getElementById('singleAssetChart').getContext('2d');
@@ -235,20 +242,68 @@
                             type: 'line',
                             data: {
                                 labels: labelsQ,
-                                datasets: [{ 
-                                    label: `${asset.name} NAV`, 
-                                    data: curveData, 
-                                    borderColor: asset.cagr >= 0 ? '#3b82f6' : '#f43f5e', 
-                                    backgroundColor: asset.cagr >= 0 ? 'rgba(59, 130, 246, 0.1)' : 'rgba(244, 63, 94, 0.1)',
-                                    fill: true, tension: 0.3, borderWidth: 3, pointRadius: 2, pointBackgroundColor: '#fff'
-                                }]
+                                datasets: [
+                                    { 
+                                        label: `${asset.name} NAV`, 
+                                        data: curveData, 
+                                        borderColor: asset.cagr >= 0 ? '#3b82f6' : '#f43f5e', 
+                                        backgroundColor: asset.cagr >= 0 ? 'rgba(59, 130, 246, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+                                        fill: true, tension: 0.3, borderWidth: 3, pointRadius: 2, pointBackgroundColor: '#fff',
+                                        yAxisID: 'y'
+                                    },
+                                    { 
+                                        label: `BB Upper`, 
+                                        data: bbUpper, 
+                                        borderColor: 'rgba(59, 130, 246, 0.4)', 
+                                        borderDash: [5, 5],
+                                        fill: false, tension: 0.3, borderWidth: 1.5, pointRadius: 0,
+                                        yAxisID: 'y'
+                                    },
+                                    { 
+                                        label: `BB Lower`, 
+                                        data: bbLower, 
+                                        borderColor: 'rgba(59, 130, 246, 0.4)', 
+                                        borderDash: [5, 5],
+                                        fill: false, tension: 0.3, borderWidth: 1.5, pointRadius: 0,
+                                        yAxisID: 'y'
+                                    },
+                                    { 
+                                        label: `RSI`, 
+                                        data: rsiData, 
+                                        borderColor: '#fbbf24', 
+                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                                        fill: true, tension: 0.3, borderWidth: 1.5, pointRadius: 2,
+                                        yAxisID: 'yRSI'
+                                    }
+                                ]
                             },
                             options: {
                                 responsive: true, maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
+                                plugins: { 
+                                    legend: { 
+                                        display: true,
+                                        labels: { color: '#cbd5e1' }
+                                    } 
+                                },
                                 scales: {
-                                    y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
-                                    x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }
+                                    y: { 
+                                        type: 'linear',
+                                        position: 'left',
+                                        grid: { color: '#1e293b' }, 
+                                        ticks: { color: '#94a3b8' } 
+                                    },
+                                    yRSI: { 
+                                        type: 'linear',
+                                        position: 'right',
+                                        min: 0,
+                                        max: 100,
+                                        grid: { display: false }, 
+                                        ticks: { color: '#fbbf24' } 
+                                    },
+                                    x: { 
+                                        grid: { color: '#1e293b' }, 
+                                        ticks: { color: '#94a3b8' } 
+                                    }
                                 }
                             }
                         });
